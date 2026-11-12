@@ -1,0 +1,260 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// 登录账号：平台管理员 / 机构账号
+model Account {
+  id           String   @id @default(cuid())
+  username     String   @unique
+  passwordHash String
+  role         String   @default("ORG") // ORG | PLATFORM
+  orgId        String?  @unique
+  org          Org?     @relation(fields: [orgId], references: [id])
+  createdAt    DateTime @default(now())
+
+  @@index([orgId])
+}
+
+// 机构
+model Org {
+  id        String   @id @default(cuid())
+  name      String
+  address   String   @default("")
+  phone     String   @default("")
+  logo      String   @default("") // logo 图片 URL/路径
+  createdAt DateTime @default(now())
+
+  account         Account?
+  campuses        Campus[]
+  teachers        Teacher[]
+  courses         Course[]
+  tags            StudentTag[]
+  keywordGroups   KeywordGroup[]
+  keywords        Keyword[]
+  contests        Contest[]
+  commentTpl      CommentTemplate[]
+  quota           QuotaAccount?
+  students        Student[]
+  reports         Report[]
+  contestSchedule ContestSchedule[]
+  achievements    AchievementPreset[]
+}
+
+// 校区
+model Campus {
+  id        String   @id @default(cuid())
+  orgId     String
+  name      String
+  createdAt DateTime @default(now())
+  org       Org      @relation(fields: [orgId], references: [id])
+
+  @@index([orgId])
+}
+
+// 规划/指导老师
+model Teacher {
+  id        String   @id @default(cuid())
+  orgId     String
+  name      String
+  title     String   @default("")
+  createdAt DateTime @default(now())
+  org       Org      @relation(fields: [orgId], references: [id])
+
+  @@index([orgId])
+}
+
+// 课程体系
+model Course {
+  id        String   @id @default(cuid())
+  orgId     String
+  name      String
+  intro     String   @default("")
+  isCustom  Boolean  @default(false) // 机构自定义添加
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  org       Org      @relation(fields: [orgId], references: [id])
+
+  @@index([orgId])
+}
+
+// 学员标签
+model StudentTag {
+  id        String   @id @default(cuid())
+  orgId     String
+  name      String
+  createdAt DateTime @default(now())
+  org       Org      @relation(fields: [orgId], references: [id])
+
+  @@index([orgId])
+}
+
+// 表现关键词分组（7 组）
+model KeywordGroup {
+  id        String   @id @default(cuid())
+  orgId     String
+  name      String
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  org       Org      @relation(fields: [orgId], references: [id])
+  keywords  Keyword[]
+
+  @@index([orgId])
+}
+
+// 表现关键词
+model Keyword {
+  id        String       @id @default(cuid())
+  orgId     String
+  content   String
+  groupId   String
+  group     KeywordGroup @relation(fields: [groupId], references: [id])
+  createdAt DateTime     @default(now())
+  org       Org          @relation(fields: [orgId], references: [id])
+
+  @@index([orgId])
+  @@index([groupId])
+}
+
+// 赛事考级
+model Contest {
+  id        String   @id @default(cuid())
+  orgId     String
+  name      String
+  type      String   @default("赛事") // 赛事 | 考级
+  intro     String   @default("")
+  createdAt DateTime @default(now())
+  org       Org      @relation(fields: [orgId], references: [id])
+
+  @@index([orgId])
+}
+
+// 评语模板
+model CommentTemplate {
+  id        String   @id @default(cuid())
+  orgId     String
+  title     String   @default("")
+  category  String   @default("") // 如：综合优秀型 / 踏实进步型
+  content   String   @db.Text
+  createdAt DateTime @default(now())
+  org       Org      @relation(fields: [orgId], references: [id])
+
+  @@index([orgId])
+}
+
+// 学习成果预置库（机构预置 + 自由填写）
+model AchievementPreset {
+  id        String   @id @default(cuid())
+  orgId     String
+  name      String
+  type      String   @default("奖章") // 奖章 | 等级 | 目标
+  createdAt DateTime @default(now())
+  org       Org      @relation(fields: [orgId], references: [id])
+
+  @@index([orgId])
+}
+
+// 机构赛事日程
+model ContestSchedule {
+  id        String   @id @default(cuid())
+  orgId     String
+  contestId String?
+  name      String
+  date      String   @default("") // YYYY-MM-DD
+  location  String   @default("")
+  signupAt  String   @default("") // 报名截止
+  createdAt DateTime @default(now())
+  org       Org      @relation(fields: [orgId], references: [id])
+
+  @@index([orgId])
+}
+
+// 学员
+model Student {
+  id        String   @id @default(cuid())
+  orgId     String
+  name      String
+  avatar    String   @default("")
+  age       Int?
+  grade     String   @default("")
+  school    String   @default("")
+  campusId  String?
+  teacherId String?
+  tags      String   @default("[]") // JSON: 标签 id 数组
+  photos    String   @default("[]") // JSON: 照片路径数组
+  createdAt DateTime @default(now())
+  org       Org      @relation(fields: [orgId], references: [id])
+  reports   Report[]
+
+  @@index([orgId])
+}
+
+// 学员成长报告 / 档案
+model Report {
+  id        String   @id @default(cuid())
+  orgId     String
+  studentId String
+  no        String   // GP-xx 机构内自增
+  title     String   @default("")
+  data      String   @db.LongText // JSON: 报告全部内容
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  lastExportAt DateTime? // 最近一次 PDF 导出时间（30 分钟免扣次窗口）
+  org       Org      @relation(fields: [orgId], references: [id])
+  student   Student  @relation(fields: [studentId], references: [id])
+
+  @@index([orgId])
+  @@index([studentId])
+}
+
+// 次数账户（按次计费）
+model QuotaAccount {
+  id      String @id @default(cuid())
+  orgId   String @unique
+  balance Int    @default(0)
+  org     Org    @relation(fields: [orgId], references: [id])
+}
+
+// 套餐（平台配置）
+model Plan {
+  id        String   @id @default(cuid())
+  name      String
+  price     Int      // 元
+  times     Int      // 次数
+  validDays Int      @default(365)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+}
+
+// 兑换码（平台生成 → 机构兑换）
+model RedeemCode {
+  id        String    @id @default(cuid())
+  code      String    @unique
+  planId    String?
+  planName  String    @default("")
+  times     Int
+  status    String    @default("UNUSED") // UNUSED | USED | VOID
+  orgId     String?
+  orgName   String    @default("")
+  usedAt    DateTime?
+  expiresAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([status])
+}
+
+// 次数流水
+model QuotaLog {
+  id        String   @id @default(cuid())
+  orgId     String
+  delta     Int
+  reason    String // 兑换充值 / 导出扣次 / 注册赠送
+  refId     String   @default("") // 关联单据
+  createdAt DateTime @default(now())
+
+  @@index([orgId])
+}
